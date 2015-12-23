@@ -1,7 +1,7 @@
 var overlay;
 
 var focusLocation = new google.maps.LatLng(39.869967, 32.744971);
-var srcImage = 'http://www.rhetoric-culture.com/blog/wp-content/uploads/2010/04/mall_directory_bsm.jpg';
+var srcImage = 'images/example.jpg';
 
 DebugOverlay.prototype = new google.maps.OverlayView();
 
@@ -11,8 +11,12 @@ var topRightPoint = new google.maps.LatLng((focusLocation.lat() + 0.001), (focus
 var bottomRightPoint = new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() + 0.001));
 var topLeftPoint = new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() - 0.001));
 var rotateMarkerPoint = {lat: bottomRightPoint.lat(), lng: ((bottomRightPoint.lng() + bottomLeftPoint.lng())/2)};
-var centerPoint;
 
+var centerPoint;
+var imgDegree = 0;
+var imgRadian = 0;
+var initialVector;
+var deltaRadian;
 
 function initialize() {
 
@@ -61,6 +65,10 @@ function initialize() {
 			icon : 'icons/rotate.png'
 		});
 	
+	//calculation of initial vector
+	centerPoint = overlay.calculateCenter();
+	initialVector = {x: rotateMarkerPoint.lat - centerPoint.lat , y: rotateMarkerPoint.lng - centerPoint.lng};
+	
 	//Resize markers "drag" events
 	google.maps.event.addListener(bottomLeftMarker, 'drag', function () {
 
@@ -83,16 +91,42 @@ function initialize() {
 		bottomRightPoint = bottomRightMarker.getPosition();
 	});	
 	
+	
+	//rotate marker events
 	google.maps.event.addListener(rotateMarker, 'dragstart', function () {
 		
-		rotateMarkerPoint = rotateMarker.getPosition();
-		centerPoint = overlay.calculateCenter(topLeftMarker.getPosition(), bottomRightMarker.getPosition());
+		var angle = overlay.calculateAngle(rotateMarker.getPosition());
+		deltaRadian = angle.radian;
+		
+		bottomLeftMarker.setVisible(false);
+		topLeftMarker.setVisible(false);
+		topRightMarker.setVisible(false);
+		bottomRightMarker.setVisible(false);
 	});
 	
 	google.maps.event.addListener(rotateMarker, 'drag', function() {
 		
-		overlay.calculateAngle(rotateMarkerPoint, rotateMarker.getPosition());
+		var angle = overlay.calculateAngle(rotateMarker.getPosition());
+		imgDegree = angle.degree;
+		document.getElementById("image").style.transform = 'rotate(' + imgDegree  + 'deg)';
 		 
+	});
+	
+	google.maps.event.addListener(rotateMarker, 'dragend', function(){
+		
+		var angle = overlay.calculateAngle(rotateMarker.getPosition());
+		deltaRadian = angle.radian - deltaRadian;
+		
+		centerPoint = overlay.calculateCenter();
+		bottomLeftMarker.setPosition(overlay.calculateRotatinMatrix(bottomLeftMarker,deltaRadian));
+		topLeftMarker.setPosition(overlay.calculateRotatinMatrix(topLeftMarker,deltaRadian));
+		topRightMarker.setPosition(overlay.calculateRotatinMatrix(topRightMarker,deltaRadian));
+		bottomRightMarker.setPosition(overlay.calculateRotatinMatrix(bottomRightMarker,deltaRadian));
+		
+		bottomLeftMarker.setVisible(true);
+		topLeftMarker.setVisible(true);
+		topRightMarker.setVisible(true);
+		bottomRightMarker.setVisible(true);
 	});
 	
 	
@@ -128,22 +162,60 @@ function initialize() {
 };
 
 
-DebugOverlay.prototype.calculateCenter = function(latLng1, latLng2)
+DebugOverlay.prototype.calculateCenter = function()
 {
+	//calculates the center point between top left and bottom right
+	latLng1 = topLeftMarker.getPosition();
+	latLng2 = bottomRightMarker.getPosition();
+	
 	var newLat = (latLng1.lat() + latLng2.lat())/2;
 	var newLng = (latLng1.lng() + latLng2.lng())/2;
-	//console.log(newLat + " " + newLng);
+
 	return {lat: newLat, lng: newLng};
 }
 
-DebugOverlay.prototype.calculateAngle = function(latLng1, latLng2)
+DebugOverlay.prototype.calculateAngle = function(currentLatLng)
 {
-	var vector1 = {x: centerPoint.lat - latLng1.lat() , y: centerPoint.lng - latLng1.lng()};
-	var vector2 = {x: centerPoint.lat - latLng2.lat() , y: centerPoint.lng - latLng2.lng()};
+	//calculates the angle between the initial vector and current position of rotate marker
+	var currentVector = {x: currentLatLng.lat() - centerPoint.lat , y: currentLatLng.lng() - centerPoint.lng};
 	
-	var angleDeg = (Math.atan2(vector2.y, vector2.x) - Math.atan2(vector1.y, vector1.x))* 180 / Math.PI;
-	console.log(angleDeg);
-	return angleDeg;
+	var angle = {degree: 0, radian: 0};
+	
+	angle.radian = (Math.atan2(currentVector.y, currentVector.x) - Math.atan2(initialVector.y, initialVector.x));
+	angle.degree = angle.radian * 180 / Math.PI;
+	return angle;
+}
+
+DebugOverlay.prototype.calculateRotatinMatrix = function(currentMarker, radian)
+{
+	var overlayProjection = this.getProjection();
+    var divCurrentPoint = overlayProjection.fromLatLngToDivPixel(currentMarker.getPosition());
+    
+    var centerPointLatLng = new google.maps.LatLng(centerPoint)
+    var divCenterPoint = overlayProjection.fromLatLngToDivPixel(centerPointLatLng);
+    
+	divCurrentPoint.x = divCurrentPoint.x - divCenterPoint.x;
+	divCurrentPoint.y = divCurrentPoint.y - divCenterPoint.y;
+	
+	var newPosition = {x: 0, y: 0};
+	
+	newPosition.x = (divCurrentPoint.x * Math.cos(radian)) - (divCurrentPoint.y * Math.sin(radian));
+	newPosition.y = (divCurrentPoint.x * Math.sin(radian)) + (divCurrentPoint.y * Math.cos(radian));
+	
+	newPosition.x = newPosition.x + divCenterPoint.x;
+	newPosition.y = newPosition.y + divCenterPoint.y;
+	
+	newPosition = overlayProjection.fromDivPixelToLatLng(newPosition);
+	
+	return newPosition;
+}
+
+DebugOverlay.prototype.dragInitialVector = function()
+{
+	//TODO drag initial vector with the center
+	//TODO not tested yet
+	centerPoint = this.calculateCenter();
+	initialVector = {x: initialVector.x + centerPoint.lat , y: initialVector.y + centerPoint.lng};
 }
 
 DebugOverlay.prototype.onAdd = function()
@@ -161,13 +233,14 @@ DebugOverlay.prototype.onAdd = function()
 	//divOverlay.style.border = "solid 3px";
 	div.appendChild(divOverlay);
 	
-	/*var img = document.createElement('img');
+	var img = document.createElement('img');
 	img.src = this.image_;
+	img.setAttribute("id", "image");
 	img.style.width = '100%';
 	img.style.height = '100%';
 	img.style.opacity = '0.5';
 	img.style.position = 'absolute';
-	divOverlay.appendChild(img);*/
+	divOverlay.appendChild(img);
 	
 	this.div_ = div;
 	var panes = this.getPanes();
