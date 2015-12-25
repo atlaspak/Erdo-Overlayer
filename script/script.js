@@ -1,7 +1,7 @@
 var overlay;
 
 var focusLocation = new google.maps.LatLng(39.869967, 32.744971);
-var srcImage = 'images/example.jpg';
+var srcImage = 'images/example.png';
 
 DebugOverlay.prototype = new google.maps.OverlayView();
 
@@ -16,7 +16,9 @@ var centerPoint;
 var imgDegree = 0;
 var imgRadian = 0;
 var initialVector;
-var deltaRadian;
+var deltaRadian = 0;
+var dragAcc;  //Helper variable for dragMarker
+var initalPosition;  //Initial position of the corner that is dragged
 
 function initialize() {
 
@@ -61,9 +63,16 @@ function initialize() {
 	rotateMarker = new google.maps.Marker({
 			position : rotateMarkerPoint,
 			map : map,
-			draggable: true,
+			draggable : true,
 			icon : 'icons/rotate.png'
 		});
+	
+	dragMarker = new google.maps.Marker({
+			position : overlay.calculateCenter(),
+			map : map,
+			draggable : true,
+			icon : 'icons/drag.png'
+	})
 	
 	//calculation of initial vector
 	centerPoint = overlay.calculateCenter();
@@ -81,9 +90,20 @@ function initialize() {
 		
 	});
 	
+	google.maps.event.addListener(topRightMarker, 'dragstart', function(){
+		initialPosition = topRightMarker.getPosition();
+	});
+	
 	google.maps.event.addListener(topRightMarker, 'drag', function () {
 
-		topRightPoint = topRightMarker.getPosition();
+		var dragVector = {lat: topRightMarker.getPosition().lat() - initialPosition.lat(), lng : topRightMarker.getPosition().lng() - initialPosition.lng()};
+		
+		//bottomRightMarker.setPosition(new google.maps.LatLng(bottomRightMarker.getPosition().lat() + dragVector.lng * Math.tan(-deltaRadian), bottomRightMarker.getPosition().lng() + dragVector.lng));
+		//topLeftMarker.setPosition(new google.maps.LatLng(topLeftMarker.getPosition().lat() + dragVector.lat, topLeftMarker.getPosition().lng() + dragVector));
+		//topRightPoint = topRightMarker.getPosition();
+		
+		initialPosition = topRightMarker.getPosition();
+		
 	});
 	
 	google.maps.event.addListener(bottomRightMarker, 'drag', function () {
@@ -129,7 +149,6 @@ function initialize() {
 		bottomRightMarker.setVisible(true);
 	});
 	
-	
 	//Resize markers "dragEnd" events
 	/*google.maps.event.addListener(bottomLeftMarker, 'dragend', function () {
 
@@ -159,6 +178,52 @@ function initialize() {
 		bottomLeftBound = new google.maps.LatLng({lat: bottomLeftBound.lat(), lng: bottomRightBound.lng()});
 		topRightBound = new google.maps.LatLng({lat: bottomRightBound.lat(), lng: topRightBound.lng()});
 	});	*/
+	
+	//dragMarker events
+	google.maps.event.addListener(dragMarker, 'dragstart', function(){
+		dragAcc = centerPoint;
+		bottomLeftMarker.setVisible(false);
+		topLeftMarker.setVisible(false);
+		topRightMarker.setVisible(false);
+		bottomRightMarker.setVisible(false);
+		rotateMarker.setVisible(false);
+		
+	});
+	
+	google.maps.event.addListener(dragMarker, 'drag', function(){
+		//Distance dragged between 'drag' events
+		var deltaDistance = {lat: dragMarker.position.lat() - dragAcc.lat, lng:dragMarker.position.lng() - dragAcc.lng};
+		//var deltaPixel = overlay.getProjection().fromLatLngToContainerPixel(new google.maps.LatLng(deltaDistance.lat, deltaDistance.lng));
+		
+		var newSWBound = new google.maps.LatLng(overlay.bounds_.getSouthWest().lat() + deltaDistance.lat, overlay.bounds_.getSouthWest().lng() + deltaDistance.lng);
+		var newNEBound = new google.maps.LatLng(overlay.bounds_.getNorthEast().lat() + deltaDistance.lat, overlay.bounds_.getNorthEast().lng() + deltaDistance.lng);
+		
+		overlay.bounds_ = new google.maps.LatLngBounds(newSWBound, newNEBound);
+		overlay.draw();
+		
+		//document.getElementById("image").style.transform = 'translate(' + deltaPixel.x  + 'px,' + deltaPixel.y + 'px)';
+		dragAcc = {lat: dragAcc.lat + deltaDistance.lat, lng: dragAcc.lng + deltaDistance.lng};
+		//dragMarker.setVisible(false);
+	});
+	
+	google.maps.event.addListener(dragMarker, 'dragend', function(){
+		//Total distance dragged during drag
+		var totalDistance = {lat: dragMarker.position.lat() - centerPoint.lat, lng:dragMarker.position.lng() - centerPoint.lng};
+		
+		bottomLeftMarker.setPosition({lat:bottomLeftMarker.position.lat() + totalDistance.lat, lng:bottomLeftMarker.position.lng() + totalDistance.lng});
+		bottomRightMarker.setPosition({lat:bottomRightMarker.position.lat() + totalDistance.lat, lng:bottomRightMarker.position.lng() + totalDistance.lng});
+		topLeftMarker.setPosition({lat:topLeftMarker.position.lat() + totalDistance.lat, lng:topLeftMarker.position.lng() + totalDistance.lng});
+		topRightMarker.setPosition({lat:topRightMarker.position.lat() + totalDistance.lat, lng:topRightMarker.position.lng() + totalDistance.lng});
+		rotateMarker.setPosition({lat:rotateMarker.position.lat() + totalDistance.lat, lng:rotateMarker.position.lng() + totalDistance.lng});
+		centerPoint = overlay.calculateCenter();
+		
+		bottomLeftMarker.setVisible(true);
+		topLeftMarker.setVisible(true);
+		topRightMarker.setVisible(true);
+		bottomRightMarker.setVisible(true);
+		rotateMarker.setVisible(true);
+		//dragMarker.setVisible(true);
+	})
 };
 
 
@@ -264,6 +329,7 @@ DebugOverlay.prototype.drawInnerDiv = function () {
 	var overlayProjection = this.getProjection();
 	var sw = overlayProjection.fromLatLngToDivPixel(this.bounds_.getSouthWest());
 	var ne = overlayProjection.fromLatLngToDivPixel(this.bounds_.getNorthEast());
+	
 	var div = this.div_;
 	div.style.left = sw.x + 'px';
 	div.style.top = ne.y + 'px';
