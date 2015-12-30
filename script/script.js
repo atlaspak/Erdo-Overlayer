@@ -6,23 +6,15 @@ var srcImage = 'images/example.png';
 DebugOverlay.prototype = new google.maps.OverlayView();
 
 
-var bottomLeftPoint = new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() - 0.001));
-var topRightPoint = new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() + 0.001));
-var bottomRightPoint = new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() + 0.001));
-var topLeftPoint = new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() - 0.001));
-var rotateMarkerPoint = {lat: bottomRightPoint.lat(), lng: ((bottomRightPoint.lng() + bottomLeftPoint.lng())/2)};
-
-var centerPoint;
-var imgDegree = 0;
-var imgRadian = 0;
-var initialVector;
-var deltaRadian = 0;
-var dragAcc;  //Helper variable for dragMarker
+var centerMarkerPrevPosition = undefined;
+var rotationStartRadian = 0,rotationEndRadian = 0;
+var totalDragPixel = {lat:0, lng:0};  //Helper variable for centerMarker 'drag'
 var initalPosition;  //Initial position of the corner that is dragged
 
 function initialize() {
 
-	var bounds = new google.maps.LatLngBounds(bottomLeftPoint, topRightPoint);
+	var bounds = new google.maps.LatLngBounds(new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() - 0.001)),
+											  new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() + 0.001)));
 
 	var mapOptions = {
 		zoom : 18,
@@ -33,60 +25,56 @@ function initialize() {
 	overlay = new DebugOverlay(bounds, srcImage, map);
 	
 	bottomLeftMarker = new google.maps.Marker({
-			position : bottomLeftPoint,
+			position : new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() - 0.001)),
 			map : map,
 			draggable : true,
 			icon : 'icons/target1.png'
 		});
 		
 	topLeftMarker = new google.maps.Marker({
-			position : topLeftPoint,
+			position : new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() - 0.001)),
 			map : map,
 			draggable : true,
 			icon : 'icons/target2.png'
 		});
 		
 	topRightMarker = new google.maps.Marker({
-			position : topRightPoint,
+			position : new google.maps.LatLng((focusLocation.lat() + 0.001), (focusLocation.lng() + 0.001)),
 			map : map,
 			draggable : true,
 			icon : 'icons/target3.png'
 		});
 		
 	bottomRightMarker = new google.maps.Marker({
-			position : bottomRightPoint,
+			position : new google.maps.LatLng((focusLocation.lat() - 0.001), (focusLocation.lng() + 0.001)),
 			map : map,
 			draggable : true,
 			icon : 'icons/target4.png'
 		});
 				
 	rotateMarker = new google.maps.Marker({
-			position : rotateMarkerPoint,
+			position : new google.maps.LatLng(bottomRightMarker.getPosition().lat(), 
+											  (bottomRightMarker.getPosition().lng() + bottomLeftMarker.getPosition().lng()) / 2),
 			map : map,
 			draggable : true,
 			icon : 'icons/rotate.png'
 		});
 	
-	dragMarker = new google.maps.Marker({
+	centerMarker = new google.maps.Marker({
 			position : overlay.calculateCenter(),
 			map : map,
 			draggable : true,
 			icon : 'icons/drag.png'
-	})
+	});
 	
-	//calculation of initial vector
-	centerPoint = overlay.calculateCenter();
-	initialVector = {x: rotateMarkerPoint.lat - centerPoint.lat , y: rotateMarkerPoint.lng - centerPoint.lng};
 	
 	//Resize markers "drag" events
 	google.maps.event.addListener(bottomLeftMarker, 'drag', function () {
 
-		bottomLeftPoint = bottomLeftMarker.getPosition();
 	});
 	
 	google.maps.event.addListener(topLeftMarker, 'drag', function () {
 
-		topLeftPoint = topLeftMarker.getPosition();
 		
 	});
 	
@@ -96,28 +84,37 @@ function initialize() {
 	
 	google.maps.event.addListener(topRightMarker, 'drag', function () {
 
-		var dragVector = {lat: topRightMarker.getPosition().lat() - initialPosition.lat(), lng : topRightMarker.getPosition().lng() - initialPosition.lng()};
+		/*var dragVector = {lat: topRightMarker.getPosition().lat() - initialPosition.lat(), lng : topRightMarker.getPosition().lng() - initialPosition.lng()};
 		
 		//bottomRightMarker.setPosition(new google.maps.LatLng(bottomRightMarker.getPosition().lat() + dragVector.lng * Math.tan(-deltaRadian), bottomRightMarker.getPosition().lng() + dragVector.lng));
 		//topLeftMarker.setPosition(new google.maps.LatLng(topLeftMarker.getPosition().lat() + dragVector.lat, topLeftMarker.getPosition().lng() + dragVector));
 		//topRightPoint = topRightMarker.getPosition();
 		
+		initialPosition = topRightMarker.getPosition();*/
+		
+		var dragVector = {lat: topRightMarker.getPosition().lat() - initialPosition.lat(), lng : topRightMarker.getPosition().lng() - initialPosition.lng()};
+		var scaleFactor = {lat: 1+ ((topRightMarker.getPosition().lat() / initialPosition.lat())), lng: 1+ ((topRightMarker.getPosition().lng() / initialPosition.lng()))};
+		
+		/*var bottomLeftProj = projectLatLngtoCenter(bottomLeftMarker.getPosition(), centerPoint);
+		var bottomRightProj = projectLatLngtoCenter(bottomRightMarker.getPosition(), centerPoint);
+		var topLeftProj = projectLatLngtoCenter(topLeftMarker.getPosition(), centerPoint);
+		var topRightProj = projectLatLngtoCenter(topRightMarker.getPosition(), centerPoint);*/
+		
+		
 		initialPosition = topRightMarker.getPosition();
+
 		
 	});
 	
 	google.maps.event.addListener(bottomRightMarker, 'drag', function () {
 
-		bottomRightPoint = bottomRightMarker.getPosition();
 	});	
 	
 	
 	//rotate marker events
 	google.maps.event.addListener(rotateMarker, 'dragstart', function () {
-		
-		var angle = overlay.calculateAngle(rotateMarker.getPosition());
-		deltaRadian = angle.radian;
-		
+		rotationStartRadian = overlay.calculateAngle();;
+			
 		bottomLeftMarker.setVisible(false);
 		topLeftMarker.setVisible(false);
 		topRightMarker.setVisible(false);
@@ -126,27 +123,29 @@ function initialize() {
 	
 	google.maps.event.addListener(rotateMarker, 'drag', function() {
 		
-		var angle = overlay.calculateAngle(rotateMarker.getPosition());
-		imgDegree = angle.degree;
-		document.getElementById("image").style.transform = 'rotate(' + imgDegree  + 'deg)';
-		 
+		var angle = overlay.calculateAngle();
+		document.getElementById("image").style.transform = 'rotate(' + -angle.degree  + 'deg)';	
+		
 	});
 	
 	google.maps.event.addListener(rotateMarker, 'dragend', function(){
 		
-		var angle = overlay.calculateAngle(rotateMarker.getPosition());
-		deltaRadian = angle.radian - deltaRadian;
+		rotationEndRadian = overlay.calculateAngle();
+		var totalRotationRadian = rotationEndRadian.radian - rotationStartRadian.radian;
 		
-		centerPoint = overlay.calculateCenter();
-		bottomLeftMarker.setPosition(overlay.calculateRotatinMatrix(bottomLeftMarker,deltaRadian));
-		topLeftMarker.setPosition(overlay.calculateRotatinMatrix(topLeftMarker,deltaRadian));
-		topRightMarker.setPosition(overlay.calculateRotatinMatrix(topRightMarker,deltaRadian));
-		bottomRightMarker.setPosition(overlay.calculateRotatinMatrix(bottomRightMarker,deltaRadian));
-		
+		bottomLeftMarker.setPosition(overlay.rotateMarker(bottomLeftMarker,totalRotationRadian));
+		topLeftMarker.setPosition(overlay.rotateMarker(topLeftMarker,totalRotationRadian));
+		topRightMarker.setPosition(overlay.rotateMarker(topRightMarker,totalRotationRadian));
+		bottomRightMarker.setPosition(overlay.rotateMarker(bottomRightMarker,totalRotationRadian));
+						
 		bottomLeftMarker.setVisible(true);
 		topLeftMarker.setVisible(true);
 		topRightMarker.setVisible(true);
 		bottomRightMarker.setVisible(true);
+		
+		//Tried to set rotateMarker between bottom markers, NOT WORKING
+		//rotateMarker.setPosition(new google.maps.LatLng((bottomRightMarker.getPosition().lat() + bottomLeftMarker.getPosition().lat()) / 2,
+		//			(bottomRightMarker.getPosition().lng() + bottomLeftMarker.getPosition().lng()) / 2));
 	});
 	
 	//Resize markers "dragEnd" events
@@ -179,9 +178,14 @@ function initialize() {
 		topRightBound = new google.maps.LatLng({lat: bottomRightBound.lat(), lng: topRightBound.lng()});
 	});	*/
 	
-	//dragMarker events
-	google.maps.event.addListener(dragMarker, 'dragstart', function(){
-		dragAcc = centerPoint;
+	//centerMarker events
+	google.maps.event.addListener(centerMarker, 'dragstart', function(){
+		overlay.map.setOptions({scrollwheel: false});
+		
+		centerMarkerPrevPosition = centerMarker.getPosition();
+		totalDragPixel.x = 0
+		totalDragPixel.y = 0;
+		
 		bottomLeftMarker.setVisible(false);
 		topLeftMarker.setVisible(false);
 		topRightMarker.setVisible(false);
@@ -190,39 +194,61 @@ function initialize() {
 		
 	});
 	
-	google.maps.event.addListener(dragMarker, 'drag', function(){
+	google.maps.event.addListener(centerMarker, 'drag', function(){
 		//Distance dragged between 'drag' events
-		var deltaDistance = {lat: dragMarker.position.lat() - dragAcc.lat, lng:dragMarker.position.lng() - dragAcc.lng};
-		//var deltaPixel = overlay.getProjection().fromLatLngToContainerPixel(new google.maps.LatLng(deltaDistance.lat, deltaDistance.lng));
+		var deltaDistance = {   lat: centerMarker.position.lat() - centerMarkerPrevPosition.lat(), 
+								lng: centerMarker.position.lng() - centerMarkerPrevPosition.lng()};
 		
-		var newSWBound = new google.maps.LatLng(overlay.bounds_.getSouthWest().lat() + deltaDistance.lat, overlay.bounds_.getSouthWest().lng() + deltaDistance.lng);
-		var newNEBound = new google.maps.LatLng(overlay.bounds_.getNorthEast().lat() + deltaDistance.lat, overlay.bounds_.getNorthEast().lng() + deltaDistance.lng);
+		//prev and currentCenter is required to find deltaPixel
+		var prevCenterToPixel    = overlay.getProjection().fromLatLngToDivPixel(centerMarkerPrevPosition);
+		var currentCenterToPixel = overlay.getProjection().fromLatLngToDivPixel(centerMarker.getPosition());
+		var deltaPixel = new google.maps.Point( currentCenterToPixel.x - prevCenterToPixel.x,
+												currentCenterToPixel.y - prevCenterToPixel.y);
+		//New bound points are calculated and set
+		var swBoundToPixel = overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getSouthWest());
+		swBoundToPixel = addPoints(swBoundToPixel, deltaPixel);
 		
-		overlay.bounds_ = new google.maps.LatLngBounds(newSWBound, newNEBound);
+		var neBoundToPixel = overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getNorthEast());
+		neBoundToPixel = addPoints(neBoundToPixel, deltaPixel);
+			
+		overlay.bounds_ = new google.maps.LatLngBounds( overlay.getProjection().fromDivPixelToLatLng(swBoundToPixel),
+														overlay.getProjection().fromDivPixelToLatLng(neBoundToPixel));
 		overlay.draw();
 		
-		//document.getElementById("image").style.transform = 'translate(' + deltaPixel.x  + 'px,' + deltaPixel.y + 'px)';
-		dragAcc = {lat: dragAcc.lat + deltaDistance.lat, lng: dragAcc.lng + deltaDistance.lng};
-		//dragMarker.setVisible(false);
+		totalDragPixel = addPoints(totalDragPixel, deltaPixel);
+		centerMarkerPrevPosition = centerMarker.getPosition();
 	});
 	
-	google.maps.event.addListener(dragMarker, 'dragend', function(){
-		//Total distance dragged during drag
-		var totalDistance = {lat: dragMarker.position.lat() - centerPoint.lat, lng:dragMarker.position.lng() - centerPoint.lng};
+	google.maps.event.addListener(centerMarker, 'dragend', function(){
 		
-		bottomLeftMarker.setPosition({lat:bottomLeftMarker.position.lat() + totalDistance.lat, lng:bottomLeftMarker.position.lng() + totalDistance.lng});
-		bottomRightMarker.setPosition({lat:bottomRightMarker.position.lat() + totalDistance.lat, lng:bottomRightMarker.position.lng() + totalDistance.lng});
-		topLeftMarker.setPosition({lat:topLeftMarker.position.lat() + totalDistance.lat, lng:topLeftMarker.position.lng() + totalDistance.lng});
-		topRightMarker.setPosition({lat:topRightMarker.position.lat() + totalDistance.lat, lng:topRightMarker.position.lng() + totalDistance.lng});
-		rotateMarker.setPosition({lat:rotateMarker.position.lat() + totalDistance.lat, lng:rotateMarker.position.lng() + totalDistance.lng});
-		centerPoint = overlay.calculateCenter();
+		var bottomLeftMarkerToPixel  = overlay.getProjection().fromLatLngToDivPixel(bottomLeftMarker.getPosition());
+		var bottomRightMarkerToPixel = overlay.getProjection().fromLatLngToDivPixel(bottomRightMarker.getPosition());
+		var topLeftMarkerToPixel     = overlay.getProjection().fromLatLngToDivPixel(topLeftMarker.getPosition());
+		var topRightMarkerToPixel    = overlay.getProjection().fromLatLngToDivPixel(topRightMarker.getPosition());
+		var rotateMarkerToPixel      = overlay.getProjection().fromLatLngToDivPixel(rotateMarker.getPosition());
+
+		bottomLeftMarkerToPixel  = addPoints(bottomLeftMarkerToPixel, totalDragPixel);
+		bottomRightMarkerToPixel = addPoints(bottomRightMarkerToPixel, totalDragPixel);
+		topLeftMarkerToPixel     = addPoints(topLeftMarkerToPixel, totalDragPixel);
+		topRightMarkerToPixel    = addPoints(topRightMarkerToPixel, totalDragPixel); 
+		rotateMarkerToPixel      = addPoints(rotateMarkerToPixel, totalDragPixel);
+
+		
+		bottomLeftMarker.setPosition(overlay.getProjection().fromDivPixelToLatLng(bottomLeftMarkerToPixel));
+		bottomRightMarker.setPosition(overlay.getProjection().fromDivPixelToLatLng(bottomRightMarkerToPixel));
+		topLeftMarker.setPosition(overlay.getProjection().fromDivPixelToLatLng(topLeftMarkerToPixel));
+		topRightMarker.setPosition(overlay.getProjection().fromDivPixelToLatLng(topRightMarkerToPixel));
+		rotateMarker.setPosition(overlay.getProjection().fromDivPixelToLatLng(rotateMarkerToPixel));
+
 		
 		bottomLeftMarker.setVisible(true);
 		topLeftMarker.setVisible(true);
 		topRightMarker.setVisible(true);
 		bottomRightMarker.setVisible(true);
 		rotateMarker.setVisible(true);
-		//dragMarker.setVisible(true);
+		
+		overlay.map.setOptions({scrollwheel: true});
+
 	})
 };
 
@@ -239,48 +265,38 @@ DebugOverlay.prototype.calculateCenter = function()
 	return {lat: newLat, lng: newLng};
 }
 
-DebugOverlay.prototype.calculateAngle = function(currentLatLng)
+DebugOverlay.prototype.calculateAngle = function()
 {
 	//calculates the angle between the initial vector and current position of rotate marker
-	var currentVector = {x: currentLatLng.lat() - centerPoint.lat , y: currentLatLng.lng() - centerPoint.lng};
-	
+	var currentVector = {	lat: rotateMarker.getPosition().lat() - centerMarker.getPosition().lat()   , 
+							lng: rotateMarker.getPosition().lng() - centerMarker.getPosition().lng() };
 	var angle = {degree: 0, radian: 0};
 	
-	angle.radian = (Math.atan2(currentVector.y, currentVector.x) - Math.atan2(initialVector.y, initialVector.x));
+	angle.radian = (Math.atan2(currentVector.lat, currentVector.lng) ) + Math.PI /2;
 	angle.degree = angle.radian * 180 / Math.PI;
 	return angle;
 }
 
-DebugOverlay.prototype.calculateRotatinMatrix = function(currentMarker, radian)
-{
-	var overlayProjection = this.getProjection();
-    var divCurrentPoint = overlayProjection.fromLatLngToDivPixel(currentMarker.getPosition());
-    
-    var centerPointLatLng = new google.maps.LatLng(centerPoint)
-    var divCenterPoint = overlayProjection.fromLatLngToDivPixel(centerPointLatLng);
-    
-	divCurrentPoint.x = divCurrentPoint.x - divCenterPoint.x;
-	divCurrentPoint.y = divCurrentPoint.y - divCenterPoint.y;
-	
-	var newPosition = {x: 0, y: 0};
-	
-	newPosition.x = (divCurrentPoint.x * Math.cos(radian)) - (divCurrentPoint.y * Math.sin(radian));
-	newPosition.y = (divCurrentPoint.x * Math.sin(radian)) + (divCurrentPoint.y * Math.cos(radian));
-	
-	newPosition.x = newPosition.x + divCenterPoint.x;
-	newPosition.y = newPosition.y + divCenterPoint.y;
-	
-	newPosition = overlayProjection.fromDivPixelToLatLng(newPosition);
-	
-	return newPosition;
-}
 
-DebugOverlay.prototype.dragInitialVector = function()
-{
-	//TODO drag initial vector with the center
-	//TODO not tested yet
-	centerPoint = this.calculateCenter();
-	initialVector = {x: initialVector.x + centerPoint.lat , y: initialVector.y + centerPoint.lng};
+
+DebugOverlay.prototype.rotateMarker = function(marker, radian)
+{	
+	
+	//Rotation is done with div pixels because if not, projection errors occur
+	//TODO -radian is a temp fix to rotate properly, find out why it rotates the other way
+	var markerDivPoint = this.getProjection().fromLatLngToDivPixel(marker.getPosition());
+	var centerDivPoint = this.getProjection().fromLatLngToDivPixel(centerMarker.getPosition());
+	var projectedDivPoint = {x: markerDivPoint.x - centerDivPoint.x, y: markerDivPoint.y - centerDivPoint.y};
+	var newPosition = {x:0, y:0};
+	
+
+	newPosition.x = (projectedDivPoint.x * Math.cos(-radian)) - (projectedDivPoint.y * Math.sin(-radian));
+	newPosition.y = (projectedDivPoint.x * Math.sin(-radian)) + (projectedDivPoint.y * Math.cos(-radian));
+	
+	newPosition.x += centerDivPoint.x;
+	newPosition.y += centerDivPoint.y;
+	
+	return this.getProjection().fromDivPixelToLatLng(newPosition);
 }
 
 DebugOverlay.prototype.onAdd = function()
@@ -312,6 +328,17 @@ DebugOverlay.prototype.onAdd = function()
 	panes.overlayLayer.appendChild(div);
 	
 };
+
+
+var addPoints = function(point1, point2)
+{
+	return new google.maps.Point(point1.x + point2.x , point1.y + point2.y);
+}
+
+var subPoints = function(point1, point2)
+{
+	return new google.maps.Point(point1.x - point2.x , point1.y - point2.y);
+}
 
 DebugOverlay.prototype.draw = function () 
 {
