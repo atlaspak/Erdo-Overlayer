@@ -1,4 +1,4 @@
-var overlay;
+	var overlay;
 
 var focusLocation = new google.maps.LatLng(39.869967, 32.744971);
 var srcImage = 'images/example.png';
@@ -68,8 +68,61 @@ function initialize() {
 	
 	
 	//Resize markers "drag" events
+	google.maps.event.addListener(bottomLeftMarker, 'dragstart', function(){
+		markerPrevPosition = bottomLeftMarker.getPosition();
+	});
+	
 	google.maps.event.addListener(bottomLeftMarker, 'drag', function () {
-
+		var dragVector = subPoints( overlay.getProjection().fromLatLngToDivPixel(bottomLeftMarker.getPosition()), 
+									overlay.getProjection().fromLatLngToDivPixel(markerPrevPosition));
+		var scaleFactor = {x: 0, y:0};
+		
+		var bottomLeftDummyPosition  = markerPrevPosition;
+		var bottomRightDummyPosition = bottomRightMarker.getPosition();
+		var topLeftDummyPosition     = topLeftMarker.getPosition();
+		var topRightDummyPosition    = topRightMarker.getPosition();
+		var rotateMarkerDummyPosition= rotateMarker.getPosition();
+		
+		bottomLeftDummyPosition  = overlay.rotate(bottomLeftDummyPosition, -rotationEndRadian.radian).divPixel;
+		bottomRightDummyPosition = overlay.rotate(bottomRightDummyPosition, -rotationEndRadian.radian).divPixel; 
+		topLeftDummyPosition     = overlay.rotate(topLeftDummyPosition, -rotationEndRadian.radian).divPixel; 
+		topRightDummyPosition    = overlay.rotate(topRightDummyPosition, -rotationEndRadian.radian).divPixel;
+		
+		//rotating dragVector around (0,0) of div instead of centerMarker
+		dragVector = overlay.rotate(dragVector, -rotationEndRadian.radian, new google.maps.Point(0,0)).divPixel;
+		
+		//scaleFactor = (edge + dragVector) / edge
+		scaleFactor.x = ((bottomLeftDummyPosition.x - bottomRightDummyPosition.x) + dragVector.x) / 
+			  			 (bottomLeftDummyPosition.x - bottomRightDummyPosition.x);
+		scaleFactor.y = ((bottomLeftDummyPosition.y - topLeftDummyPosition.y) + dragVector.y) / 
+				  		 (bottomLeftDummyPosition.y - topLeftDummyPosition.y); 
+		
+		//Scaling points with bottomLeft marker as center because it's the pivot point
+		bottomRightDummyPosition = scalePoint(bottomRightDummyPosition, scaleFactor, topRightDummyPosition);
+		topLeftDummyPosition     = scalePoint(topLeftDummyPosition, scaleFactor, topRightDummyPosition);
+		topRightDummyPosition    = scalePoint(topRightDummyPosition, scaleFactor, topRightDummyPosition);
+		
+		//Scaling bounds with scaleFactor
+		var newSwBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getSouthWest()), scaleFactor, topRightDummyPosition);																	 
+		var newNeBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getNorthEast()), scaleFactor, topRightDummyPosition);
+		
+		bottomLeftDummyPosition  = overlay.rotate(bottomLeftDummyPosition, rotationEndRadian.radian).latLng;
+		bottomRightDummyPosition = overlay.rotate(bottomRightDummyPosition, rotationEndRadian.radian).latLng; 
+		topLeftDummyPosition     = overlay.rotate(topLeftDummyPosition, rotationEndRadian.radian).latLng; 
+		topRightDummyPosition    = overlay.rotate(topRightDummyPosition, rotationEndRadian.radian).latLng;
+		
+		rotateMarker.setPosition(calculateCenter(bottomLeftDummyPosition, bottomRightDummyPosition));
+		topLeftMarker.setPosition(topLeftDummyPosition);
+		bottomRightMarker.setPosition(bottomRightDummyPosition);
+		centerMarker.setPosition(calculateCenter(topRightMarker.getPosition(), bottomLeftMarker.getPosition()));
+		
+		
+		overlay.bounds_ = new google.maps.LatLngBounds( overlay.getProjection().fromDivPixelToLatLng(newSwBound), 
+											overlay.getProjection().fromDivPixelToLatLng(newNeBound));
+		overlay.draw();
+		
+		markerPrevPosition = bottomLeftMarker.getPosition();
+		
 	});
 	
 	google.maps.event.addListener(topLeftMarker, 'dragstart', function(){
@@ -96,8 +149,8 @@ function initialize() {
 		dragVector = overlay.rotate(dragVector, -rotationEndRadian.radian, new google.maps.Point(0,0)).divPixel;
 		
 		//scaleFactor = (edge + dragVector) / edge
-		scaleFactor.x = ((topRightDummyPosition.x - topLeftDummyPosition.x) + dragVector.x) / 
-			  			 (topRightDummyPosition.x - topLeftDummyPosition.x);
+		scaleFactor.x = ((topLeftDummyPosition.x - topRightDummyPosition.x) + dragVector.x) / 
+			  			 (topLeftDummyPosition.x - topRightDummyPosition.x);
 		scaleFactor.y = ((topRightDummyPosition.y - bottomRightDummyPosition.y) + dragVector.y) / 
 				  		 (topRightDummyPosition.y - bottomRightDummyPosition.y); 
 		
@@ -129,10 +182,67 @@ function initialize() {
 		
 	});
 	
-	google.maps.event.addListener(topRightMarker, 'dragstart', function(){
-		markerPrevPosition = topRightMarker.getPosition();
+	google.maps.event.addListener(bottomRightMarker, 'dragstart', function(){
+		markerPrevPosition = bottomRightMarker.getPosition();
 	});
-	//TODO It's too long for what it does, can be shortened by adding helper functions
+	
+	google.maps.event.addListener(bottomRightMarker, 'drag', function () {
+		var dragVector = subPoints( overlay.getProjection().fromLatLngToDivPixel(bottomRightMarker.getPosition()), 
+									overlay.getProjection().fromLatLngToDivPixel(markerPrevPosition));
+		var scaleFactor = {x: 0, y:0};
+		
+		var bottomLeftDummyPosition  = bottomLeftMarker.getPosition();
+		var bottomRightDummyPosition = markerPrevPosition;
+		var topLeftDummyPosition     = topLeftMarker.getPosition();
+		var topRightDummyPosition    = topRightMarker.getPosition();
+		var rotateMarkerDummyPosition= rotateMarker.getPosition();
+		
+		bottomLeftDummyPosition  = overlay.rotate(bottomLeftDummyPosition, -rotationEndRadian.radian).divPixel;
+		bottomRightDummyPosition = overlay.rotate(bottomRightDummyPosition, -rotationEndRadian.radian).divPixel; 
+		topLeftDummyPosition     = overlay.rotate(topLeftDummyPosition, -rotationEndRadian.radian).divPixel; 
+		topRightDummyPosition    = overlay.rotate(topRightDummyPosition, -rotationEndRadian.radian).divPixel;
+		
+		//rotating dragVector around (0,0) of div instead of centerMarker
+		dragVector = overlay.rotate(dragVector, -rotationEndRadian.radian, new google.maps.Point(0,0)).divPixel;
+		
+		//scaleFactor = (edge + dragVector) / edge
+		scaleFactor.x = ((bottomRightDummyPosition.x - bottomLeftDummyPosition.x) + dragVector.x) / 
+			  			 (bottomRightDummyPosition.x - bottomLeftDummyPosition.x);
+		scaleFactor.y = ((bottomRightDummyPosition.y - topRightDummyPosition.y) + dragVector.y) / 
+				  		 (bottomRightDummyPosition.y - topRightDummyPosition.y); 
+		
+		//Scaling points with bottomLeft marker as center because it's the pivot point
+		bottomLeftDummyPosition = scalePoint(bottomLeftDummyPosition, scaleFactor, topLeftDummyPosition);
+		topLeftDummyPosition    = scalePoint(topLeftDummyPosition, scaleFactor, topLeftDummyPosition);
+		topRightDummyPosition   = scalePoint(topRightDummyPosition, scaleFactor, topLeftDummyPosition);
+		
+		//Scaling bounds with scaleFactor
+		var newSwBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getSouthWest()), scaleFactor, topLeftDummyPosition);																	 
+		var newNeBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getNorthEast()), scaleFactor, topLeftDummyPosition);
+		
+		bottomLeftDummyPosition  = overlay.rotate(bottomLeftDummyPosition, rotationEndRadian.radian).latLng;
+		bottomRightDummyPosition = overlay.rotate(bottomRightDummyPosition, rotationEndRadian.radian).latLng; 
+		topLeftDummyPosition     = overlay.rotate(topLeftDummyPosition, rotationEndRadian.radian).latLng; 
+		topRightDummyPosition    = overlay.rotate(topRightDummyPosition, rotationEndRadian.radian).latLng;
+		
+		rotateMarker.setPosition(calculateCenter(bottomLeftDummyPosition, bottomRightDummyPosition));
+		topRightMarker.setPosition(topRightDummyPosition);
+		bottomLeftMarker.setPosition(bottomLeftDummyPosition);
+		centerMarker.setPosition(calculateCenter(topRightMarker.getPosition(), bottomLeftMarker.getPosition()));
+		
+		
+		overlay.bounds_ = new google.maps.LatLngBounds( overlay.getProjection().fromDivPixelToLatLng(newSwBound), 
+											overlay.getProjection().fromDivPixelToLatLng(newNeBound));
+		overlay.draw();
+		
+		markerPrevPosition = bottomRightMarker.getPosition();
+		
+	});
+	
+	google.maps.event.addListener(topRightMarker, 'dragstart', function(){
+			markerPrevPosition = topRightMarker.getPosition();
+		});
+
 	google.maps.event.addListener(topRightMarker, 'drag', function () {
 		/*Streching works as follows: . Rotate markers to their original position and rotate dragVector
 		 							  . Translate marker positions as if the marker which is diagonal to dragged marker in the origin
@@ -169,9 +279,10 @@ function initialize() {
 		bottomRightDummyPosition = scalePoint(bottomRightDummyPosition, scaleFactor, bottomLeftDummyPosition);
 		topLeftDummyPosition     = scalePoint(topLeftDummyPosition, scaleFactor, bottomLeftDummyPosition);
 		topRightDummyPosition    = scalePoint(topRightDummyPosition, scaleFactor, bottomLeftDummyPosition);
+
 		
 		//Scaling bounds with scaleFactor
-		var newSwBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getSouthWest()), scaleFactor, bottomLeftDummyPosition);																	 
+		var newSwBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getSouthWest()), scaleFactor, bottomLeftDummyPosition);
 		var newNeBound = scalePoint(overlay.getProjection().fromLatLngToDivPixel(overlay.bounds_.getNorthEast()), scaleFactor, bottomLeftDummyPosition);
 		
 		bottomLeftDummyPosition  = overlay.rotate(bottomLeftDummyPosition, rotationEndRadian.radian).latLng;
@@ -193,9 +304,7 @@ function initialize() {
 	
 	});
 	
-	google.maps.event.addListener(bottomRightMarker, 'drag', function () {
-
-	});	
+	
 	
 	
 	//rotate marker events
