@@ -1,6 +1,6 @@
 var overlay;
 
-var focusLocation = new google.maps.LatLng(39.869967, 32.744971);
+var focusLocation = new google.maps.LatLng(39.869966, 32.744971);
 var srcImage = 'images/example.png';
 
 DebugOverlay.prototype = new google.maps.OverlayView();
